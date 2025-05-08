@@ -3,42 +3,48 @@ import pandas as pd
 import joblib
 import os
 
-# Title and description
+# إعداد الواجهة
 st.set_page_config(page_title="Fake News Detection", layout="wide")
 st.title("📰 Fake News Detection")
 st.markdown("### ✍️ Enter Text for Prediction")
 
-# Load model
-model_path = "NaiveBayes.pkl"
+# قائمة النماذج المتاحة
+Model_of_Classifier = {
+    'NaiveBayes.pkl': 0.94,
+    'LogisticRegression.pkl': 0.98,
+    'DecisionTree.pkl': 0.99,
+    'SupportVectorMachine.pkl': 0.99
+}
+
+# Sidebar - اختيار النموذج
+st.sidebar.header("🛠️ Settings")
+selected_model = st.sidebar.selectbox("Choose a Classification Model:", options=list(Model_of_Classifier.keys()))
+model_accuracy = Model_of_Classifier[selected_model]
+st.sidebar.markdown(f"### Model Accuracy\n**{model_accuracy * 100:.2f}%**")
+
+# تحميل النموذج والـ vectorizer
 vectorizer_path = "vectorizer.pkl"
 
-if os.path.exists(model_path) and os.path.exists(vectorizer_path):
-    model = joblib.load(model_path)
+if os.path.exists(selected_model) and os.path.exists(vectorizer_path):
+    model = joblib.load(selected_model)
     vectorizer = joblib.load(vectorizer_path)
 else:
     st.error("Model or vectorizer file not found. Please upload them.")
     st.stop()
 
-# Input text for single prediction
+# الإدخال الفردي
 text_input = st.text_area("Input News Text:")
 
 if st.button("🚀 Predict"):
     if text_input:
-        vect_text = vectorizer.transform([text_input])  # convert to 2D
+        vect_text = vectorizer.transform([text_input])
         prediction = model.predict(vect_text)[0]
         result = "✅ REAL News" if prediction == 1 else "❌ FAKE News"
         st.success(f"Prediction: {result}")
     else:
         st.warning("Please enter some text.")
 
-# File upload for batch prediction
-st.sidebar.header("🛠️ Settings")
-st.sidebar.markdown("**Choose a Classification Model:**")
-st.sidebar.selectbox("Model", options=["NaiveBayes.pkl"], index=0)
-
-st.sidebar.markdown("### Model Accuracy")
-st.sidebar.markdown("**94.00%**")
-
+# رفع ملف CSV للتنبؤ بالجملة
 st.sidebar.markdown("### Upload CSV file for bulk prediction (must have 'text' column):")
 uploaded_file = st.sidebar.file_uploader("Browse files", type="csv")
 
@@ -55,6 +61,6 @@ if uploaded_file:
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("⬇️ Download Predictions CSV", csv, "predictions.csv", "text/csv")
 
-# Reset button
+# زر إعادة التشغيل
 if st.sidebar.button("🔄 Reset"):
     st.rerun()
