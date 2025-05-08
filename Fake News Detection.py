@@ -1,98 +1,60 @@
-
-
-
 import streamlit as st
-import pickle
-import numpy as np
 import pandas as pd
+import joblib
+import os
 
-# Available Classification Models and Accuracy
-Model_of_Classifier = {
-    'NaiveBayes.pkl': 0.94,
-    'LogisticRegression.pkl': 0.98,
-    'DecisionTree.pkl': 0.99,
-    'SupportVectorMachine.pkl': 0.99
-}
-
-# Label Mapping
-classification_labels = {
-    0: "Fake News",
-    1: "Real News",
-}
-
-# Features
-Classification_features = ['text']
-
-# Streamlit App
+# Title and description
+st.set_page_config(page_title="Fake News Detection", layout="wide")
 st.title("📰 Fake News Detection")
-st.sidebar.header("🔧 Settings")
+st.markdown("### ✍️ Enter Text for Prediction")
 
-# Sidebar: Select Classification Model
-selected_model = st.sidebar.selectbox("Choose a Classification Model:", list(Model_of_Classifier.keys()))
-model_accuracy = Model_of_Classifier[selected_model]
-st.sidebar.metric(label="Model Accuracy", value=f"{model_accuracy * 100:.2f}%")
+# Load model
+model_path = "NaiveBayes.pkl"
+vectorizer_path = "vectorizer.pkl"
 
-# Load selected model
-try:
-    with open(selected_model, 'rb') as file:
-        model = pickle.load(file)
-except FileNotFoundError:
-    st.error(f"Model file '{selected_model}' not found.")
+if os.path.exists(model_path) and os.path.exists(vectorizer_path):
+    model = joblib.load(model_path)
+    vectorizer = joblib.load(vectorizer_path)
+else:
+    st.error("Model or vectorizer file not found. Please upload them.")
     st.stop()
 
-# Sidebar: Bulk CSV Upload
-uploaded_file = st.sidebar.file_uploader("Upload CSV file for bulk prediction (must have 'text' column):", type=['csv'])
+# Input text for single prediction
+text_input = st.text_area("Input News Text:")
 
-# Sidebar: Reset
-if st.sidebar.button("🔄 Reset"):
-    st.experimental_rerun()
-
-# Compare Models
-if st.sidebar.button("📊 Compare Models"):
-    st.subheader("Model Comparison")
-    comparison_df = pd.DataFrame({
-        'Model': list(Model_of_Classifier.keys()),
-        'Accuracy (%)': [acc * 100 for acc in Model_of_Classifier.values()]
-    })
-    st.dataframe(comparison_df)
-    st.bar_chart(comparison_df.set_index('Model'))
-
-# Input Section
-if uploaded_file:
-    try:
-        input_data = pd.read_csv(uploaded_file)
-        st.write("Uploaded Data Preview:")
-        st.dataframe(input_data.head())
-    except Exception as e:
-        st.error(f"Error reading file: {e}")
-else:
-    st.subheader("✍️ Enter Text for Prediction")
-    user_input = st.text_area("Input News Text:")
-
-# Predict Button
 if st.button("🚀 Predict"):
-    try:
-        if uploaded_file:
-            if 'text' not in input_data.columns:
-                st.error("CSV must contain a 'text' column.")
-            else:
-                predictions = model.predict(input_data['text'])
-                mapped_preds = [classification_labels.get(int(p), "Unknown") for p in predictions]
-                input_data['Prediction'] = mapped_preds
-                st.write("Predictions:")
-                st.dataframe(input_data)
+    if text_input:
+        vect_text = vectorizer.transform([text_input])  # convert to 2D
+        prediction = model.predict(vect_text)[0]
+        result = "✅ REAL News" if prediction == 1 else "❌ FAKE News"
+        st.success(f"Prediction: {result}")
+    else:
+        st.warning("Please enter some text.")
 
-                # Visualize
-                unique, counts = np.unique(mapped_preds, return_counts=True)
-                hist_df = pd.DataFrame({'Class': unique, 'Count': counts})
-                st.bar_chart(hist_df.set_index('Class'))
+# File upload for batch prediction
+st.sidebar.header("🛠️ Settings")
+st.sidebar.markdown("**Choose a Classification Model:**")
+st.sidebar.selectbox("Model", options=["NaiveBayes.pkl"], index=0)
 
-        else:
-            if not user_input.strip():
-                st.warning("Please enter some text.")
-            else:
-                prediction = model.predict([user_input])
-                predicted_label = classification_labels.get(int(prediction[0]), "Unknown")
-                st.success(f"The Predicted Class is: **{predicted_label}**")
-    except Exception as e:
-        st.error(f"Prediction failed: {e}")
+st.sidebar.markdown("### Model Accuracy")
+st.sidebar.markdown("**94.00%**")
+
+st.sidebar.markdown("### Upload CSV file for bulk prediction (must have 'text' column):")
+uploaded_file = st.sidebar.file_uploader("Browse files", type="csv")
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    if 'text' not in df.columns:
+        st.error("CSV file must contain a 'text' column.")
+    else:
+        X = vectorizer.transform(df['text'])
+        predictions = model.predict(X)
+        df['prediction'] = ['REAL' if p == 1 else 'FAKE' for p in predictions]
+        st.write("### 🔍 Bulk Prediction Results")
+        st.dataframe(df[['text', 'prediction']])
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Download Predictions CSV", csv, "predictions.csv", "text/csv")
+
+# Reset button
+if st.sidebar.button("🔄 Reset"):
+    st.rerun()
